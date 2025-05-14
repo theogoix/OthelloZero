@@ -13,7 +13,7 @@ EXECUTABLE = $(BIN_DIR)/engine
 
 
 all: $(EXECUTABLE)
-	echo $(OBJECTS)
+	#@echo $(OBJECTS)
 
 $(EXECUTABLE): $(OBJECTS)
 	@mkdir -p $(BIN_DIR)
@@ -21,7 +21,7 @@ $(EXECUTABLE): $(OBJECTS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
-	echo $^
+	#@echo $^
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
 
 clean:

@@ -5,6 +5,8 @@
 #include "othello_state.h"
 #include "othello_move.h"
 
+namespace Othello{
+
 struct OthelloOps {
     static std::vector<OthelloMove> generateMoves(const OthelloState& state);
     static OthelloState applyMove(const OthelloState& state, const OthelloMove& move);
@@ -12,5 +14,6 @@ struct OthelloOps {
     static OthelloState initialState();
 };
 
+};
 
 #endif

@@ -3,11 +3,18 @@
 
 #include<cstdint>
 
-struct OthelloState {
-    uint64_t currentDiscs;
-    uint64_t opponentDiscs;
-    int moveCount;
+namespace Othello{
+    
+    const int NCOL = 8;
+    const int NROW = 8;
+
+    struct OthelloState {
+        uint64_t currentDiscs;
+        uint64_t opponentDiscs;
+        int moveCount;
+    };
 };
+
 
 
 
