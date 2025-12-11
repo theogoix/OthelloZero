@@ -1,15 +1,19 @@
 CXX = g++
-CXXFLAGS = -std=c++17 
+CXXFLAGS = -std=c++17 -Iexternal
 
 SRC_DIR = src
 OBJ_DIR = build
 BIN_DIR = bin
+TEST_DIR = tests
+TEST_OBJ_DIR = build_tests
 
 SOURCES = $(shell find $(SRC_DIR) -type f -name '*.cpp')
 OBJECTS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))
 EXECUTABLE = $(BIN_DIR)/engine
 
-
+TEST_SOURCES = $(shell find $(TEST_DIR) -type f -name '*.cpp')
+TEST_OBJECTS = $(patsubst $(TEST_DIR)/%.cpp,$(TEST_OBJ_DIR)/%.o,$(TEST_SOURCES))
+TEST_EXECUTABLE = $(BIN_DIR)/tests
 
 
 all: $(EXECUTABLE)
@@ -24,8 +28,21 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	#@echo $^
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
 
+tests: $(TEST_EXECUTABLE)
+	./$(TEST_EXECUTABLE)
+
+$(TEST_EXECUTABLE): $(TEST_OBJECTS)
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+$(TEST_OBJ_DIR)/%.o: $(TEST_DIR)/%.o
+	@mkdir -p $(dir $@)
+	#@echo $^
+	$(CXX) $(CXXFLAGS) -c -o $@ $^
+
+
 clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
+	rm -rf $(OBJ_DIR) $(BIN_DIR) $(TEST_OBJ_DIR)
 
 run: $(EXECUTABLE)
 	@./$(EXECUTABLE)
