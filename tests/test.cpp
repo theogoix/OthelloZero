@@ -1,5 +1,7 @@
-#include <iostream>
+#include<iostream>
+#include"doctest.h"
 #include "game/othello/othello.h"
+
 
 int main() {
     Othello::hello_world();

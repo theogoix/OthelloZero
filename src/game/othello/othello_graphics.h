@@ -7,7 +7,7 @@ namespace Othello{
 
     const int SECRET_NUMBER = 42;
     void hello_world();
-    void print_othello_state(const OthelloState& state);
+    void print_othello_state(const OthelloState& state, bool black_turn = true);
 
 };
 #endif

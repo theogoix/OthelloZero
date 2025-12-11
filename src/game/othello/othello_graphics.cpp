@@ -9,11 +9,10 @@ namespace Othello {
         std::cout << "hello world, and goodbye";
     };
 
-    void print_othello_state(const OthelloState& state){
+    void print_othello_state(const OthelloState& state, bool black_turn){
         char black_symbol = 'X';
         char white_symbol = 'O';
         char empty_symbol = '.';
-        bool black_turn = not (state.moveCount % 2);
         uint64_t black_discs = black_turn? state.currentDiscs : state.opponentDiscs;
         uint64_t white_discs = black_turn ? state.opponentDiscs : state.currentDiscs;
         
