@@ -117,13 +117,10 @@ Bitboard generateMovesBb(const OthelloState& state){
 
     #define GENERATE_MOVES_DIR(id) \
         do { \
-            std::cout << "Going for loop " << id << "\n";               \
-            constexpr DirectionMask direction_mask = direction_mask_lookup[id];    \
             Bitboard gen = cur;\
             Bitboard pro = opp | ( emp & shift_id<id>(opp));\
             Bitboard dir_fill = fill<id>(gen, pro);\
             Bitboard cand_mov_dir = dir_fill & emp;\
-            print_bb(cand_mov_dir);\
             candidate_moves |= cand_mov_dir;\
         } while(0);
 
@@ -139,7 +136,7 @@ Bitboard generateMovesBb(const OthelloState& state){
     #undef GENERATE_MOVES_DIR
 
 
-    print_bb(candidate_moves);
+    //print_bb(candidate_moves);
 
     return candidate_moves;
 };
@@ -158,9 +155,9 @@ namespace Othello {
         }
         else {
             while (candidate_moves){
-                OthelloMove mv = static_cast<OthelloMove> (__builtin_clzll(candidate_moves));
+                OthelloMove mv = static_cast<OthelloMove>(__builtin_ctzll(candidate_moves));
                 move_list.push_back(mv);
-                candidate_moves &= ~(-(candidate_moves));
+                candidate_moves &= candidate_moves - 1;
             }
         }
         return move_list;
@@ -180,21 +177,31 @@ namespace Othello {
 
             Bitboard gen = square_to_bb(move);
             
+            #define FLIP_DIR(id) \
+                do {\
+                    constexpr DirectionMask direction_mask = direction_mask_lookup[id]; \
+                    constexpr Direction dir = direction_mask.dir; \
+                    Bitboard pro = (opp | cur) & ~(shift<dir>(cur)); \
+                    Bitboard dir_fill = fill<id>(gen, pro); \
+                    Bitboard target = dir_fill & cur & (~gen); \
+                    if (target){ \
+                        Bitboard flipped = dir_fill & opp; \
+                        opp &= ~flipped; \
+                        cur |= flipped; \
+                    }\
+                } while(0);
+            FLIP_DIR(0);
+            FLIP_DIR(1);
+            FLIP_DIR(2);
+            FLIP_DIR(3);
+            FLIP_DIR(4);
+            FLIP_DIR(5);
+            FLIP_DIR(6);
+            FLIP_DIR(7);
 
+            #undef FLIPDIR
+            cur |= gen;
 
-                for (int i = 0; i < 8; i++){
-                    DirectionMask direction_mask = direction_mask_lookup[i];
-                    Direction dir = direction_mask.dir;
-                    Bitboard mask = direction_mask.mask; 
-                    Bitboard pro = (opp | cur) & ~(cur << dir);
-                    Bitboard dir_fill = fill<0>(gen, pro);
-                    Bitboard target = dir_fill & cur & (~gen);
-                    if (target){
-                        Bitboard flipped = dir_fill & opp;
-                        opp &= ~flipped;
-                        cur |= flipped;
-                    }
-                };
             }
         return {
             opp,
@@ -209,8 +216,8 @@ namespace Othello {
 
     OthelloState OthelloOps::initialState(){
         return {
-        0x0000001008000000,
         0x0000000810000000,
+        0x0000001008000000,
         0,
         };
     };
