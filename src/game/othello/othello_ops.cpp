@@ -1,18 +1,22 @@
 #include "othello_ops.h"
 #include <iostream>
 
+
 using namespace Othello;
 
 using Bitboard = uint64_t;
 
-constexpr Bitboard COL_H = 0x0101010101010101ULL;
-constexpr Bitboard COL_A = 0x8080808080808080ULL;
-constexpr Bitboard ROW_1 = 0xFF00000000000000ULL;
-constexpr Bitboard ROW_8 = 0x00000000000000FFULL;
+constexpr Bitboard COL_A = 0x0101010101010101ULL;
+constexpr Bitboard COL_H = 0x8080808080808080ULL;
+constexpr Bitboard ROW_1 = 0x00000000000000FFULL;
+constexpr Bitboard ROW_8 = 0xFF00000000000000ULL;
 
-constexpr Bitboard NOT_COL_H = ~COL_H;
+
 constexpr Bitboard NOT_COL_A = ~COL_A;
+constexpr Bitboard NOT_COL_H = ~COL_H;
 constexpr Bitboard EMPTY = 0x0000000000000000ULL;
+constexpr Bitboard FULL = ~EMPTY;
+
 
 Bitboard square_to_bb(OthelloMove sq){return 1ULL << sq;};
 
@@ -28,6 +32,18 @@ void print_bb(Bitboard bb){
     }
     std::cout << "\n";
 }
+
+
+enum DirectionId {
+    EAST_ID,
+    SOUTH_ID,
+    WEST_ID,
+    NORTH_ID,
+    SOUTHEAST_ID,
+    SOUTHWEST_ID,
+    NORTHWEST_ID,
+    NORTHEAST_ID,
+};
 
 enum Direction {
     EAST = 1,
@@ -47,67 +63,89 @@ struct DirectionMask {
     Bitboard mask;
 };
 
-const DirectionMask direction_mask_lookup[8] = {
-    {EAST, NOT_COL_H},
-    {SOUTH, EMPTY},
-    {WEST, NOT_COL_A},
-    {NORTH, EMPTY},
-    {SOUTHEAST, NOT_COL_H},
-    {SOUTHWEST, NOT_COL_A},
-    {NORTHWEST, NOT_COL_A},
-    {NORTHEAST, NOT_COL_H},
+constexpr DirectionMask direction_mask_lookup[8] = {
+    {EAST, NOT_COL_A},
+    {SOUTH, FULL},
+    {WEST, NOT_COL_H},
+    {NORTH, FULL},
+    {SOUTHEAST, NOT_COL_A},
+    {SOUTHWEST, NOT_COL_H},
+    {NORTHWEST, NOT_COL_H},
+    {NORTHEAST, NOT_COL_A},
 };
 
+template<int dir>
+constexpr Bitboard shift(Bitboard bb){
+    if constexpr (dir > 0){
+        return bb << dir;
+    }
+    else if constexpr (dir < 0){
+        return bb >> -dir;
+    }
+    else {
+        return bb;
+    }
+}
 
+template<int dir_id>
+constexpr Bitboard shift_id(Bitboard bb){
+    constexpr Direction dir = direction_mask_lookup[dir_id].dir;
+    return shift<dir>(bb); 
+}
 
-
-Bitboard fill(Bitboard gen, Bitboard pro, Direction dir, Bitboard mask){
+template<int direction_id>
+constexpr Bitboard fill(Bitboard gen, Bitboard pro){
+    constexpr DirectionMask dirmask = direction_mask_lookup[direction_id];
+    constexpr Direction dir = dirmask.dir;
+    constexpr Bitboard mask = dirmask.mask;
     pro &= mask;
-    gen |= pro & (gen << dir);
-    pro &= (pro << dir);
-    gen |= pro & (gen << 2 * dir);
-    pro &= (pro << 2 * dir);
-    gen |= pro & (gen << 4 * dir);
+    gen |= pro & shift<dir>(gen);
+    pro &= shift<dir>(pro);
+    gen |= pro & shift<2 * dir>(gen);
+    pro &= shift<2 * dir>(pro);
+    gen |= pro & shift<4 * dir>(gen);
     return gen;
 };
 
-Bitboard southFill(Bitboard g, Bitboard p){
-    g |= p & (g << SOUTH);
-    p &= (p << SOUTH);
-    g |= p & (g << 2 * SOUTH);
-    p &= (p << 2*SOUTH);
-    g |= p & (g << 4 * SOUTH);
-    
-    return g;
-    
-};
 
 Bitboard generateMovesBb(const OthelloState& state){
     Bitboard cur = state.currentDiscs;
     Bitboard opp = state.opponentDiscs;
     Bitboard emp = ~(cur | opp);
-    print_bb(0x0000FFFF00001111);
-    print_bb(cur);
-    print_bb(opp);
 
     Bitboard candidate_moves = EMPTY;
-    
-    for (int i = 0; i < 8; i++){
-        std::cout << "Going for loop " << i << "\n";
-        DirectionMask direction_mask = direction_mask_lookup[i];
-        Direction dir = direction_mask.dir;
-        Bitboard mask = direction_mask.mask; 
-        Bitboard gen = cur;
-        Bitboard pro = (opp | emp) & ~(emp << dir);
-        Bitboard dir_fill = fill(gen, pro, dir, mask);
-        Bitboard cand_mov_dir = dir_fill & emp;
-        print_bb(cand_mov_dir);
-        candidate_moves |= cand_mov_dir;
-    };
+
+    #define GENERATE_MOVES_DIR(id) \
+        do { \
+            std::cout << "Going for loop " << id << "\n";               \
+            constexpr DirectionMask direction_mask = direction_mask_lookup[id];    \
+            Bitboard gen = cur;\
+            Bitboard pro = opp | ( emp & shift_id<id>(opp));\
+            Bitboard dir_fill = fill<id>(gen, pro);\
+            Bitboard cand_mov_dir = dir_fill & emp;\
+            print_bb(cand_mov_dir);\
+            candidate_moves |= cand_mov_dir;\
+        } while(0);
+
+    GENERATE_MOVES_DIR(0);
+    GENERATE_MOVES_DIR(1);
+    GENERATE_MOVES_DIR(2);
+    GENERATE_MOVES_DIR(3);
+    GENERATE_MOVES_DIR(4);
+    GENERATE_MOVES_DIR(5);
+    GENERATE_MOVES_DIR(6);
+    GENERATE_MOVES_DIR(7);
+
+    #undef GENERATE_MOVES_DIR
+
+
     print_bb(candidate_moves);
 
     return candidate_moves;
 };
+
+
+
 
 namespace Othello {
 
@@ -121,6 +159,7 @@ namespace Othello {
         else {
             while (candidate_moves){
                 OthelloMove mv = static_cast<OthelloMove> (__builtin_clzll(candidate_moves));
+                move_list.push_back(mv);
                 candidate_moves &= ~(-(candidate_moves));
             }
         }
@@ -136,14 +175,19 @@ namespace Othello {
         }
         else {
             passes = 0;
+
+
+
             Bitboard gen = square_to_bb(move);
+            
+
 
                 for (int i = 0; i < 8; i++){
                     DirectionMask direction_mask = direction_mask_lookup[i];
                     Direction dir = direction_mask.dir;
                     Bitboard mask = direction_mask.mask; 
                     Bitboard pro = (opp | cur) & ~(cur << dir);
-                    Bitboard dir_fill = fill(gen, pro, dir, mask);
+                    Bitboard dir_fill = fill<0>(gen, pro);
                     Bitboard target = dir_fill & cur & (~gen);
                     if (target){
                         Bitboard flipped = dir_fill & opp;

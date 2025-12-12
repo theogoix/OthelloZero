@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Iexternal -Isrc
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc
 
 SRC_DIR = src
 OBJ_DIR = build
@@ -41,6 +41,9 @@ $(TEST_OBJ_DIR)/%.o: $(TEST_DIR)/%.cpp
 	@mkdir -p $(dir $@)
 	#@echo $^
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
+
+
+debug: $(EXECUTABLE)
 
 
 clean:
