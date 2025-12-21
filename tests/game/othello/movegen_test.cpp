@@ -55,6 +55,12 @@ TEST_CASE("Testing the move generation manually"){
 
 }
 
+TEST_CASE("Check win condition"){
+    OthelloState state = from_fen("XXXXXXXX/OOOOOOOO/XXXXXXXX/OOOOOOOO/XXXXXXXX/OOOOOOOO/XXXXXXXX/OOOOOOOO");
+    Result result = OthelloOps::gameResult(state);
+    CHECK(result == Result::Draw);
+};
+
 TEST_CASE("Initial position move generation") {
 
     OthelloState state = OthelloOps::initialState();

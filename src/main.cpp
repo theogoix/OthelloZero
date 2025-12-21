@@ -1,5 +1,5 @@
 #include <iostream>
-#include "game/othello/othello.h"
+#include "othello/othello.h"
 
 int main() {
     using Ops = Othello::OthelloOps;
