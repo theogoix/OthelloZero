@@ -1,14 +1,14 @@
 CXX = g++
 PYTHON = python.3.12
 PYTHON_CONFIG = python3.12-config
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc -fPIC
 
 VENV := .venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
 PYBIND11_INCLUDES = $(shell $(PY) -m pybind11 --includes)
 
-PYTHON_SUFFIX = $(shell $(PY)-config --extension-suffix)
+PYTHON_SUFFIX = $(shell $(PYTHON_CONFIG) --extension-suffix)
 SRC_DIR = src
 BUILD_DIR := build
 
@@ -24,10 +24,10 @@ BINDINGS_SOURCES = $(shell find $(BINDINGS_SRC_DIR) -type f -name '*.cpp')
 BINDINGS_SHARED_DIR = src/gui
 BINDINGS_BUILD_DIR = $(BUILD_DIR)/bindings
 BINDINGS_OBJ = $(patsubst $(BINDINGS_SRC_DIR)/%.cpp,$(BINDINGS_BUILD_DIR)/%.o,$(BINDINGS_SOURCES))
-BINDINGS_SHARED_OBJ = $(patsubst $(BINDINGS_SRC_DIR)/%.cpp,$(BINDINGS_SHARED_DIR)/%.so,$(BINDINGS_SOURCES))
+BINDINGS_SHARED_OBJ = $(patsubst $(BINDINGS_SRC_DIR)/%.cpp,$(BINDINGS_SHARED_DIR)/%$(PYTHON_SUFFIX),$(BINDINGS_SOURCES))
 BINDINGS_LINK_OBJECTS = $(OTHELLO_OBJ)
 BINDINGS_BUILD_FLAGS = $(PYBIND11_INCLUDES) -fPIC
-BINDINGS_SHARED_FLAGS = -shared $(shell $(PYTHON_CONFIG) --ldflags)
+BINDINGS_SHARED_FLAGS = $(shell $(PYTHON_CONFIG) --ldflags --embed)
 
 TEST_SRC_DIR := tests
 TEST_BUILD_DIR := build_tests
@@ -70,19 +70,23 @@ $(OTHELLO_BUILD_DIR)/%.o: $(OTHELLO_SRC_DIR)/%.cpp
 	#@echo $^
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
 
+show:
+	echo $(PYTHON_SUFFIX)
+	echo $(BINDINGS_SHARED_FLAGS)
 
 bindings: $(BINDINGS_SHARED_OBJ)
 
 
-$(BINDINGS_SHARED_DIR)/%.so: $(BINDINGS_BUILD_DIR)/%.o
-	@mkdir -p $(dir $@)
-	#@echo $^
-	$(CXX) $(CXXFLAGS) $(BINDINGS_SHARED_FLAGS) -o $@ $^
 
-$(BINDINGS_BUILD_DIR)/%.o: $(BINDINGS_SRC_DIR)/%.cpp $(BINDINGS_LINK_OBJECTS)
+$(BINDINGS_SHARED_DIR)/%$(PYTHON_SUFFIX): $(BINDINGS_BUILD_DIR)/%.o $(BINDINGS_LINK_OBJECTS)
 	@mkdir -p $(dir $@)
 	#@echo $^
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(BINDINGS_BUILD_FLAGS)
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^ $(BINDINGS_SHARED_FLAGS)
+
+$(BINDINGS_BUILD_DIR)/%.o: $(BINDINGS_SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	#@echo $^
+	$(CXX) $(CXXFLAGS) $(PYBIND11_INCLUDES) -fPIC -c $^ -o $@ $(BINDINGS_BUILD_FLAGS)
 
 
 
