@@ -138,12 +138,6 @@ Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
         }
     }
     
-    // Print some statistics
-    std::cout << "MCTS Statistics:\n";
-    std::cout << "  Simulations: " << simulations_done << "\n";
-    std::cout << "  Nodes created: " << pool_.size() << "\n";
-    std::cout << "  Root visits: " << root->visit_count << "\n";
-
 
 
     return root;

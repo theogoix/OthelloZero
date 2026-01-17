@@ -1,7 +1,9 @@
 CXX = g++
 PYTHON = python.3.12
 PYTHON_CONFIG = python3.12-config
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc -fPIC -Wno-unused-parameter
+
+OPT ?= 0
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O$(OPT) -Iexternal -Isrc -fPIC -Wno-unused-parameter
 
 VENV := .venv
 PY   := $(VENV)/bin/python
@@ -17,9 +19,13 @@ LIBTORCH_INCLUDE := -Iexternal/libtorch/include \
 	-Iexternal/libtorch/include/torch/csrc/api/include
 
 LIBTORCH_LIB_DIR := -Lexternal/libtorch/lib
-LIBTORCH_LIBS := -ltorch -lc10 -ltorch_cpu -ltorch_cuda -lc10_cuda -Wl,-rpath,external/libtorch/lib
+LIBTORCH_LIBS := \
+  -Wl,--no-as-needed \
+  -ltorch -ltorch_cuda -lc10_cuda -ltorch_cpu -lc10 \
+  -Wl,--as-needed \
+  -Wl,-rpath,external/libtorch/lib
 
-
+MAIN_DIR = $(SRC_DIR)/mains
 
 OTHELLO_SRC_DIR = $(SRC_DIR)/othello
 OTHELLO_SOURCES = $(shell find $(OTHELLO_SRC_DIR) -type f -name '*.cpp')
@@ -43,6 +49,11 @@ ENGINE_SOURCES = $(shell find $(ENGINE_SRC_DIR) -type f -name '*.cpp')
 ENGINE_BUILD_DIR = $(BUILD_DIR)/engine
 ENGINE_OBJ = $(patsubst $(ENGINE_SRC_DIR)/%.cpp,$(ENGINE_BUILD_DIR)/%.o,$(ENGINE_SOURCES))
 
+TRAINING_SRC_DIR = $(SRC_DIR)/training
+TRAINING_SOURCES = $(shell find $(TRAINING_SRC_DIR) -type f -name '*.cpp')
+TRAINING_BUILD_DIR = $(BUILD_DIR)/training
+TRAINING_OBJ = $(patsubst $(TRAINING_SRC_DIR)/%.cpp,$(TRAINING_BUILD_DIR)/%.o,$(TRAINING_SOURCES))
+
 
 
 TEST_SRC_DIR := tests
@@ -58,6 +69,9 @@ SHARE_DIR := $(OBJ_DIR)/pyext
 
 
 EXECUTABLE = $(BIN_DIR)/engine
+MAIN_EXECUTABLE = $(MAIN_DIR)/main.cpp
+DATAGEN_EXE = $(BIN_DIR)/datagen
+DATAGEN_MAIN = $(MAIN_DIR)/generate_selfplay.cpp
 
 TEST_SOURCES = $(shell find $(TEST_DIR) -type f -name '*.cpp')
 TEST_OBJECTS = $(patsubst $(TEST_DIR)/%.cpp,$(TEST_OBJ_DIR)/%.o,$(TEST_SOURCES))
@@ -72,6 +86,7 @@ TEST_EXECUTABLE = $(BIN_DIR)/tests
 all: $(EXECUTABLE)
 	#@echo $(OTHELLO_OBJ)
 
+training: $(DATAGEN_EXE)
 
 $(VENV):
 	python -m venv $(VENV)
@@ -87,6 +102,11 @@ $(OTHELLO_BUILD_DIR)/%.o: $(OTHELLO_SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
 
 $(ENGINE_BUILD_DIR)/%.o: $(ENGINE_SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	#@echo $^
+	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -c -o $@ $^
+
+$(TRAINING_BUILD_DIR)/%.o: $(TRAINING_SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
 	#@echo $^
 	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -c -o $@ $^
@@ -119,6 +139,11 @@ $(BINDINGS_BUILD_DIR)/%.o: $(BINDINGS_SRC_DIR)/%.cpp
 $(EXECUTABLE): $(OTHELLO_OBJ) $(ENGINE_OBJ)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -o $@ $^ $(SRC_DIR)/main.cpp $(LIBTORCH_LIB_DIR) $(LIBTORCH_LIBS)
+
+$(DATAGEN_EXE): $(OTHELLO_OBJ) $(ENGINE_OBJ) $(TRAINING_OBJ)
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -o $@ $^ $(DATAGEN_MAIN) $(LIBTORCH_LIB_DIR) $(LIBTORCH_LIBS)
+
 
 
 tests: $(TEST_EXECUTABLE)
