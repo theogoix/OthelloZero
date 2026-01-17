@@ -1,5 +1,6 @@
 #include <iostream>
 #include "othello_graphics.h"
+#include "othello_ops.h"
 #include <cctype>
 
 using namespace Othello;
@@ -43,6 +44,7 @@ namespace Othello {
         OthelloState state = {
             0x0000000000000000ULL,
             0x0000000000000000ULL,
+            0x0000000000000000ULL,
             0,
         };
         int row = 0;
@@ -53,12 +55,12 @@ namespace Othello {
             if (std::isdigit(c)) { col += c - '0'; continue; }
 
             int pos = row * 8 + col;
-            if (c == 'X') state.currentDiscs |= (1ULL << pos);
-            else if (c == 'O') state.opponentDiscs |= (1ULL << pos);
+            if (c == 'X') state.opponentDiscs |= (1ULL << pos);
+            else if (c == 'O') state.currentDiscs |= (1ULL << pos);
 
             col++;
         }
-        return state;
+        return OthelloOps::applyMove(state, OthelloMove::PASS);
     }
     
 

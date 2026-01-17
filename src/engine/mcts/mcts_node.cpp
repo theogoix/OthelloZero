@@ -2,9 +2,6 @@
 
 namespace OthelloMCTS {
 
-bool Node::is_terminal() const {
-    return Othello::OthelloOps::isTerminal(state);
-}
 
 Node* NodePool::allocate(const Othello::OthelloState& state) {
     nodes_.emplace_back(std::make_unique<Node>());

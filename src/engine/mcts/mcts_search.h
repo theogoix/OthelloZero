@@ -19,6 +19,17 @@ struct MCTSConfig {
     float dirichlet_epsilon = 0.25f;
 };
 
+
+struct MCTSSearchResult {
+    Othello::OthelloMove selected_move;
+    Othello::OthelloState state;
+    int total_visits;
+    std::array<int, 64> visit_counts = {};
+    std::array<float, 64> q_values = {};
+
+};
+
+
 // Represents one step in the path: the node we were at and the edge we took
 struct PathStep {
     Node* node;   // Node we were at
@@ -35,11 +46,22 @@ class MCTSSearch {
 public:
     MCTSSearch(NeuralEvaluator& evaluator, const MCTSConfig& config = MCTSConfig());
     
-    // Run search from given position and return best move
-    Othello::OthelloMove search(const Othello::OthelloState& root_state);
+    // Move selection with temperature
+    Othello::OthelloMove select_move(Node* root, float temperature) const;
     
-    // Get move visit counts (for analysis or temperature-based selection)
-    std::vector<std::pair<Othello::OthelloMove, int>> get_move_visits() const;
+    // Run search from given position and return best move
+    Node* search(const Othello::OthelloState& root_state, Node* root = nullptr);
+    
+    // Extract information from root (after search)
+    std::array<int, 64> get_visit_counts(Node* root) const;
+    std::array<float, 64> get_q_values(Node* root) const;
+
+    // Tree reuse: get child node for move (returns nullptr if not found)
+    Node* get_child_node(Node* root, Othello::OthelloMove move);
+
+
+    // Get statistics
+    int get_total_visits(Node* root) const { return root->visit_count; }
     
     // Reset for new game (clears tree)
     void reset();
@@ -51,12 +73,14 @@ private:
     NeuralEvaluator& evaluator_;
     MCTSConfig config_;
     NodePool pool_;
-    Node* root_ = nullptr;
     
     // Core MCTS phases
     
     // Phase 1: Select leaf node using UCB
     SelectResult select_leaf(Node* root);
+    // Phase 1.5: If selected node is a node whose only move is a pass, expands this node
+    // without needing the evaluation of the neural net
+    void expand_pass_node(Node* node);
     
     // Phase 2: Expand node with NN evaluation
     void expand_node(Node* node, const NNEval& eval);
@@ -75,9 +99,7 @@ private:
     
     // Add Dirichlet noise to root for exploration
     void add_dirichlet_noise(Node* root);
-    
-    // Convert bitboard to move list
-    std::vector<Othello::OthelloMove> bitboard_to_moves(uint64_t bitboard) const;
+
 };
 
 } // namespace OthelloMCTS

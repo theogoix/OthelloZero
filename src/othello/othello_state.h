@@ -12,12 +12,13 @@ namespace Othello{
     struct OthelloState {
         uint64_t currentDiscs;
         uint64_t opponentDiscs;
-        uint8_t passes;    
+        uint64_t legalMoves;
+        bool lastMoveWasPass;    
         
         bool operator==(const OthelloState& other) const {
         return currentDiscs == other.currentDiscs &&
                opponentDiscs == other.opponentDiscs &&
-               passes == other.passes;
+               lastMoveWasPass == other.lastMoveWasPass;
         }
     };
     

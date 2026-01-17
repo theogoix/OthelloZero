@@ -14,18 +14,15 @@ struct Node {
     
     // Tree structure
     std::vector<Edge> edges;
-    // NO parent pointer - we store path during traversal
     
     // Statistics (single-threaded, no atomics needed!)
     int visit_count = 0;
-    float total_value = 0.0f;
     
     // Expansion status
     bool expanded = false;
     
     // Helper methods
     bool is_terminal() const { return Othello::OthelloOps::isTerminal(state); }
-    float Q() const { return visit_count > 0 ? total_value / visit_count : 0.0f; }
 };
 
 struct Edge {

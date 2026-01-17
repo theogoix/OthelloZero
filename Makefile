@@ -1,16 +1,24 @@
 CXX = g++
 PYTHON = python.3.12
 PYTHON_CONFIG = python3.12-config
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc -fPIC
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O0 -Iexternal -Isrc -fPIC -Wno-unused-parameter
 
 VENV := .venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
 PYBIND11_INCLUDES = $(shell $(PY) -m pybind11 --includes)
 
-PYTHON_SUFFIX = $(shell $(PYTHON_CONFIG) --extension-suffix)
+PYTHON_SUFFIX := $(shell $(PYTHON_CONFIG) --extension-suffix)
 SRC_DIR = src
 BUILD_DIR := build
+
+
+LIBTORCH_INCLUDE := -Iexternal/libtorch/include \
+	-Iexternal/libtorch/include/torch/csrc/api/include
+
+LIBTORCH_LIB_DIR := -Lexternal/libtorch/lib
+LIBTORCH_LIBS := -ltorch -lc10 -ltorch_cpu -ltorch_cuda -lc10_cuda -Wl,-rpath,external/libtorch/lib
+
 
 
 OTHELLO_SRC_DIR = $(SRC_DIR)/othello
@@ -18,16 +26,24 @@ OTHELLO_SOURCES = $(shell find $(OTHELLO_SRC_DIR) -type f -name '*.cpp')
 OTHELLO_BUILD_DIR = $(BUILD_DIR)/othello
 OTHELLO_OBJ = $(patsubst $(OTHELLO_SRC_DIR)/%.cpp,$(OTHELLO_BUILD_DIR)/%.o,$(OTHELLO_SOURCES))
 
+GUI_DIR := src/gui
 
 BINDINGS_SRC_DIR = $(SRC_DIR)/bindings
 BINDINGS_SOURCES = $(shell find $(BINDINGS_SRC_DIR) -type f -name '*.cpp')
-BINDINGS_SHARED_DIR = src/gui
+BINDINGS_SHARED_DIR = $(GUI_DIR)
 BINDINGS_BUILD_DIR = $(BUILD_DIR)/bindings
 BINDINGS_OBJ = $(patsubst $(BINDINGS_SRC_DIR)/%.cpp,$(BINDINGS_BUILD_DIR)/%.o,$(BINDINGS_SOURCES))
 BINDINGS_SHARED_OBJ = $(patsubst $(BINDINGS_SRC_DIR)/%.cpp,$(BINDINGS_SHARED_DIR)/%$(PYTHON_SUFFIX),$(BINDINGS_SOURCES))
 BINDINGS_LINK_OBJECTS = $(OTHELLO_OBJ)
-BINDINGS_BUILD_FLAGS = $(PYBIND11_INCLUDES) -fPIC
+BINDINGS_BUILD_FLAGS = $(PYBIND11_INCLUDES)
 BINDINGS_SHARED_FLAGS = $(shell $(PYTHON_CONFIG) --ldflags --embed)
+
+ENGINE_SRC_DIR = $(SRC_DIR)/engine
+ENGINE_SOURCES = $(shell find $(ENGINE_SRC_DIR) -type f -name '*.cpp')
+ENGINE_BUILD_DIR = $(BUILD_DIR)/engine
+ENGINE_OBJ = $(patsubst $(ENGINE_SRC_DIR)/%.cpp,$(ENGINE_BUILD_DIR)/%.o,$(ENGINE_SOURCES))
+
+
 
 TEST_SRC_DIR := tests
 TEST_BUILD_DIR := build_tests
@@ -70,9 +86,18 @@ $(OTHELLO_BUILD_DIR)/%.o: $(OTHELLO_SRC_DIR)/%.cpp
 	#@echo $^
 	$(CXX) $(CXXFLAGS) -c -o $@ $^
 
+$(ENGINE_BUILD_DIR)/%.o: $(ENGINE_SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	#@echo $^
+	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -c -o $@ $^
+
+
 show:
 	echo $(PYTHON_SUFFIX)
 	echo $(BINDINGS_SHARED_FLAGS)
+
+gui: bindings
+	$(PY) $(GUI_DIR)/gui.py
 
 bindings: $(BINDINGS_SHARED_OBJ)
 
@@ -91,9 +116,9 @@ $(BINDINGS_BUILD_DIR)/%.o: $(BINDINGS_SRC_DIR)/%.cpp
 
 
 
-$(EXECUTABLE): $(OTHELLO_OBJ)
+$(EXECUTABLE): $(OTHELLO_OBJ) $(ENGINE_OBJ)
 	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(SRC_DIR)/main.cpp
+	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -o $@ $^ $(SRC_DIR)/main.cpp $(LIBTORCH_LIB_DIR) $(LIBTORCH_LIBS)
 
 
 tests: $(TEST_EXECUTABLE)
@@ -116,8 +141,11 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR) $(TEST_OBJ_DIR)
 	rm -f $(BINDINGS_SHARED_DIR)/*.so
 
+clean_executable:
+	rm -rf $(BIN_DIR)
+
 run: $(EXECUTABLE)
 	@./$(EXECUTABLE)
 
 .PHONY:
-	clean all
+	clean all run clean_executable

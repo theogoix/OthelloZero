@@ -16,7 +16,7 @@ class OthelloNet(nn.Module):
     Input: [batch, 3, 8, 8]
       - Channel 0: Current player's pieces
       - Channel 1: Opponent's pieces  
-      - Channel 2: Color to move
+      - Channel 2: Possible moves
     
     Output: (policy, value)
       - policy: [batch, 64] - move probabilities

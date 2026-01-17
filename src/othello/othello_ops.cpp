@@ -112,9 +112,7 @@ constexpr Bitboard fill(Bitboard gen, Bitboard pro){
 };
 
 
-Bitboard generateMovesBb(const OthelloState& state){
-    Bitboard cur = state.currentDiscs;
-    Bitboard opp = state.opponentDiscs;
+Bitboard generateMovesBb(Bitboard cur, Bitboard opp){
     Bitboard emp = ~(cur | opp);
 
     Bitboard candidate_moves = EMPTY;
@@ -153,8 +151,8 @@ namespace Othello {
     std::vector<OthelloMove> OthelloOps::generateMoves(const OthelloState& state){
         std::vector<OthelloMove> move_list = {};
 
-        Bitboard candidate_moves = generateMovesBb(state);
-        if (candidate_moves == 0){
+        Bitboard candidate_moves = state.legalMoves;
+        if (candidate_moves == 0 && !state.lastMoveWasPass){
             move_list.push_back(PASS);
         }
         else {
@@ -170,12 +168,12 @@ namespace Othello {
     OthelloState OthelloOps::applyMove(const OthelloState& state, const OthelloMove& move){
         Bitboard cur = state.currentDiscs;
         Bitboard opp = state.opponentDiscs;
-        uint8_t passes = state.passes;
+        bool lastMoveWasPass = state.lastMoveWasPass;
         if (move == PASS){
-            passes++;
+            lastMoveWasPass = true;
         }
         else {
-            passes = 0;
+            lastMoveWasPass = false;
 
 
 
@@ -206,32 +204,36 @@ namespace Othello {
             #undef FLIPDIR
             cur |= gen;
 
-            }
+        }
+
+        Bitboard legal_moves = generateMovesBb(opp,cur);
         return {
             opp,
             cur,
-            passes,
+            legal_moves,
+            lastMoveWasPass,
         };
     };
     
     bool OthelloOps::isTerminal(const OthelloState& state){
-        return state.passes > 1;
+        return state.lastMoveWasPass && state.legalMoves == 0;
     };
 
     OthelloState OthelloOps::initialState(){
+        Bitboard cur = 0x0000000810000000;
+        Bitboard opp = 0x0000001008000000;
+        Bitboard legalMoves = generateMovesBb(cur, opp);
         return {
-        0x0000000810000000,
-        0x0000001008000000,
-        0,
+        cur,
+        opp,
+        legalMoves,
+        false,
         };
     };
 
     Result OthelloOps::gameResult(const OthelloState& state){
         int cur_count = std::__popcount(state.currentDiscs);
         int opp_count = std::__popcount(state.opponentDiscs);
-        print_bb(state.currentDiscs);
-        print_bb(state.opponentDiscs);
-        std::cout << cur_count << " " << opp_count << "/n";
         if (cur_count > opp_count) {return Result::Win;}
         else if (cur_count < opp_count) {return Result::Loss;}
         else {return Result::Draw;}

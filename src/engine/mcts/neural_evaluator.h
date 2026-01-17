@@ -6,10 +6,10 @@
 #include <string>
 #include "othello/othello.h"
 
-#ifdef USE_TORCH
+
 #include <torch/script.h>
 #include <torch/torch.h>
-#endif
+
 
 namespace OthelloMCTS {
 
@@ -33,7 +33,7 @@ public:
 private:
     bool initialized_ = false;
     
-#ifdef USE_TORCH
+
     torch::jit::script::Module module_;
     torch::Device device_;
     
@@ -44,7 +44,7 @@ private:
     // Encode single state into tensor slice
     void encode_state(const Othello::OthelloState& state, 
                      torch::Tensor tensor_slice);
-#endif
+
 };
 
 // Fallback: random evaluator for testing without NN

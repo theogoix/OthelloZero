@@ -3,16 +3,83 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
+#include <cassert>
 
 namespace OthelloMCTS {
 
 MCTSSearch::MCTSSearch(NeuralEvaluator& evaluator, const MCTSConfig& config)
     : evaluator_(evaluator), config_(config) {}
 
-Othello::OthelloMove MCTSSearch::search(const Othello::OthelloState& root_state) {
-    // Create root node
-    root_ = pool_.allocate(root_state);
+
+Othello::OthelloMove MCTSSearch::select_move(Node* root, float temperature) const {
+    if (!root || !root->expanded || !root->state.legalMoves) {
+        return Othello::OthelloMove::PASS;  // No valid move
+    }
     
+    if (temperature < 0.01f) {
+        // Deterministic: select most visited
+        auto best = std::max_element(
+            root->edges.begin(),
+            root->edges.end(),
+            [](const Edge& a, const Edge& b) {
+                return a.visit_count < b.visit_count;
+            }
+        );
+        return best->move;
+    }
+    
+    // Stochastic: sample proportional to visits^(1/temp)
+    std::vector<float> probabilities;
+    probabilities.reserve(root->edges.size());
+    float sum = 0.0f;
+    
+    for (const auto& edge : root->edges) {
+        float prob = std::pow((float)edge.visit_count, 1.0f / temperature);
+        probabilities.push_back(prob);
+        sum += prob;
+    }
+    
+    // Normalize
+    for (auto& p : probabilities) {
+        p /= sum;
+    }
+    
+    // Sample
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<> dist(probabilities.begin(), probabilities.end());
+    
+    int selected_idx = dist(gen);
+    return root->edges[selected_idx].move;
+}
+
+Node* MCTSSearch::get_child_node(Node* root, Othello::OthelloMove move) {
+    if (!root || !root->expanded) {
+        return nullptr;
+    }
+    
+    for (auto& edge : root->edges) {
+        if (edge.move == move) {
+            return edge.child;  // May be nullptr if not yet created
+        }
+    }
+    
+    return nullptr;  // Move not found in children
+}
+
+
+Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
+    // Create root node
+    
+    if (root == nullptr){
+        root = pool_.allocate(root_state);
+    }
+    else{
+        assert(root->state == root_state);
+    }
+
+
+
     int simulations_done = 0;
     
     while (simulations_done < config_.num_simulations) {
@@ -26,7 +93,7 @@ Othello::OthelloMove MCTSSearch::search(const Othello::OthelloState& root_state)
         );
         
         for (int i = 0; i < batch_size; i++) {
-            SelectResult result = select_leaf(root_);
+            SelectResult result = select_leaf(root);
             
             // If leaf is terminal, handle immediately
             if (result.leaf->is_terminal()) {
@@ -66,42 +133,35 @@ Othello::OthelloMove MCTSSearch::search(const Othello::OthelloState& root_state)
         // Add Dirichlet noise to root after first batch (when root is expanded)
         if (simulations_done == batch_size && 
             config_.use_dirichlet && 
-            root_->expanded) {
-            add_dirichlet_noise(root_);
+            root->expanded) {
+            add_dirichlet_noise(root);
         }
     }
-    
-    // Select best move based on visit counts
-    if (root_->edges.empty()) {
-        return -1;  // No legal moves
-    }
-    
-    auto best_edge = std::max_element(
-        root_->edges.begin(),
-        root_->edges.end(),
-        [](const Edge& a, const Edge& b) {
-            return a.visit_count < b.visit_count;
-        }
-    );
     
     // Print some statistics
     std::cout << "MCTS Statistics:\n";
     std::cout << "  Simulations: " << simulations_done << "\n";
     std::cout << "  Nodes created: " << pool_.size() << "\n";
-    std::cout << "  Root visits: " << root_->visit_count << "\n";
-    std::cout << "  Root value: " << root_->Q() << "\n";
-    std::cout << "  Best move: " << best_edge->move 
-              << " (visits: " << best_edge->visit_count 
-              << ", Q: " << best_edge->Q() << ")\n";
-    
-    return best_edge->move;
+    std::cout << "  Root visits: " << root->visit_count << "\n";
+
+
+
+    return root;
 }
 
 SelectResult MCTSSearch::select_leaf(Node* root) {
     SelectResult result;
     Node* node = root;
     
-    while (node->expanded && !node->is_terminal()) {
+    while (!node->is_terminal()) {
+        if (!node->expanded){
+            if (node->state.legalMoves == 0){
+                MCTSSearch::expand_pass_node(node);
+            }
+            else {
+                break;
+            }
+        }
         Edge* best = select_best_edge(node);
         
         if (!best) break;  // No valid edges (shouldn't happen if expanded)
@@ -131,19 +191,29 @@ Node* MCTSSearch::get_or_create_child(Node* parent, Edge* edge) {
     return edge->child;
 }
 
+void MCTSSearch::expand_pass_node(Node* node){
+
+    assert(node->state.legalMoves == 0);
+    assert(!node->state.lastMoveWasPass);
+    node->expanded = true;
+    Edge edge;
+    edge.move = Othello::OthelloMove::PASS;
+    edge.child = nullptr;
+    edge.prior = 1.0f;
+    node->edges = {edge};
+    return;
+}
+
 void MCTSSearch::expand_node(Node* node, const NNEval& eval) {
-    // Legal moves are already precomputed in the state!
-    uint64_t legal_moves_bitboard = node->state.legalMoves;
-    
-    if (legal_moves_bitboard == 0) {
-        // Terminal node - no children
-        node->expanded = true;
-        return;
-    }
+
+    // Terminal nodes shouldn't be expanded,
+    // Nodes whose only move is PASS should be expanded using the expand_pass_node method
+    assert(node->state.legalMoves != 0);
     
     // Convert bitboard to move list
-    auto legal_moves = bitboard_to_moves(legal_moves_bitboard);
+    std::vector<Othello::OthelloMove> legal_moves = Othello::OthelloOps::generateMoves(node->state);
     
+
     // Normalize policy over legal moves
     float policy_sum = 0.0f;
     for (auto move : legal_moves) {
@@ -169,14 +239,12 @@ void MCTSSearch::expand_node(Node* node, const NNEval& eval) {
 void MCTSSearch::backpropagate(const SelectResult& result, float value) {
     // Update leaf node
     result.leaf->visit_count++;
-    result.leaf->total_value += value;
     value = -value;  // Flip perspective for parent
     
     // Update path in reverse (from leaf to root)
     for (auto it = result.path.rbegin(); it != result.path.rend(); ++it) {
         // Update node statistics
         it->node->visit_count++;
-        it->node->total_value += value;
         
         // Update edge statistics (remove virtual loss, add real value)
         it->edge->total_value += config_.virtual_loss + value;
@@ -211,17 +279,37 @@ Edge* MCTSSearch::select_best_edge(Node* node) const {
     return best;
 }
 
-std::vector<Othello::OthelloMove> MCTSSearch::bitboard_to_moves(uint64_t bitboard) const {
-    std::vector<Othello::OthelloMove> moves;
+std::array<int, 64> MCTSSearch::get_visit_counts(Node* root) const {
+    std::array<int, 64> counts;
+    counts.fill(0);
     
-    for (int pos = 0; pos < 64; pos++) {
-        if (bitboard & (1ULL << pos)) {
-            moves.push_back(pos);
-        }
+    if (!root || !root->expanded || !root->state.legalMoves) {
+        return counts;
     }
     
-    return moves;
+    for (const auto& edge : root->edges) {
+        counts[edge.move] = edge.visit_count;
+    }
+    
+    return counts;
 }
+
+
+std::array<float, 64> MCTSSearch::get_q_values(Node* root) const {
+    std::array<float, 64> q_values;
+    q_values.fill(0.0f);
+    
+    if (!root || !root->expanded || !root->state.legalMoves) {
+        return q_values;
+    }
+    
+    for (const auto& edge : root->edges) {
+        q_values[edge.move] = edge.Q();
+    }
+    
+    return q_values;
+}
+
 
 void MCTSSearch::add_dirichlet_noise(Node* root) {
     if (root->edges.empty()) return;
@@ -248,21 +336,9 @@ void MCTSSearch::add_dirichlet_noise(Node* root) {
     }
 }
 
-std::vector<std::pair<Othello::OthelloMove, int>> 
-MCTSSearch::get_move_visits() const {
-    std::vector<std::pair<Othello::OthelloMove, int>> result;
-    if (!root_) return result;
-    
-    for (const auto& edge : root_->edges) {
-        result.emplace_back(edge.move, edge.visit_count);
-    }
-    
-    return result;
-}
 
 void MCTSSearch::reset() {
     pool_.reset();
-    root_ = nullptr;
 }
 
 } // namespace OthelloMCTS
