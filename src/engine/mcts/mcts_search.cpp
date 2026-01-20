@@ -68,11 +68,90 @@ Node* MCTSSearch::get_child_node(Node* root, Othello::OthelloMove move) {
     return nullptr;  // Move not found in children
 }
 
+
+Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
+    // Create root node
+    
+    if (root == nullptr){
+        root = pool_.allocate(root_state);
+    }
+    else{
+        assert(root->state == root_state);
+    }
+
+
+
+    int simulations_done = 0;
+    
+    while (simulations_done < config_.num_simulations) {
+        // Phase 1: Collect batch of leaf nodes
+        std::vector<Node*> batch_nodes;
+        std::vector<SelectResult> batch_results;
+        
+        int batch_size = std::min(
+            config_.batch_size,
+            config_.num_simulations - simulations_done
+        );
+        
+        for (int i = 0; i < batch_size; i++) {
+            SelectResult result = select_leaf(root);
+            
+            // If leaf is terminal, handle immediately
+            if (result.leaf->is_terminal()) {
+                float terminal_value = Othello::OthelloOps::gameResult(result.leaf->state);
+                backpropagate(result, terminal_value);
+                simulations_done++;
+                continue;
+            }
+            
+            batch_nodes.push_back(result.leaf);
+            batch_results.push_back(result);
+        }
+        
+        if (batch_nodes.empty()) continue;
+        
+        // Phase 2: Evaluate batch with neural network
+        std::vector<Othello::OthelloState> states;
+        for (Node* node : batch_nodes) {
+            states.push_back(node->state);
+        }
+        
+        auto evaluations = evaluator_.evaluate_batch(states);
+        
+        // Phase 3: Expand nodes and backpropagate
+        for (size_t i = 0; i < batch_nodes.size(); i++) {
+            Node* node = batch_nodes[i];
+            
+            if (!node->expanded) {
+                expand_node(node, evaluations[i]);
+            }
+            
+            backpropagate(batch_results[i], evaluations[i].value);
+        }
+        
+        simulations_done += batch_nodes.size();
+        
+        // Add Dirichlet noise to root after first batch (when root is expanded)
+        if (simulations_done == batch_size && 
+            config_.use_dirichlet && 
+            root->expanded) {
+            add_dirichlet_noise(root);
+        }
+    }
+    
+
+
+    return root;
+}
+
+
+
+
 // Performs a MCTS search starting at the root_state,
 // Returns a pointer to the root of the MCTS tree,
 // The root optional argument should if provided have the same state
 // as the input state, in which case the search will resume from the already performed work
-Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
+Node* MCTSSearch::search_async(const Othello::OthelloState& root_state, Node* root) {
     // Create root node
     
     if (root == nullptr){

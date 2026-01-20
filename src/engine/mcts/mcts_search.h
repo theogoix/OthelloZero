@@ -51,6 +51,9 @@ public:
     
     // Run search from given position and return best move
     Node* search(const Othello::OthelloState& root_state, Node* root = nullptr);
+
+    // Run search from given position and return best move
+    Node* search_async(const Othello::OthelloState& root_state, Node* root = nullptr);
     
     // Extract information from root (after search)
     std::array<int, 64> get_visit_counts(Node* root) const;
