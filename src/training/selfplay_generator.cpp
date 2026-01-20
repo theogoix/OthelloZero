@@ -36,7 +36,7 @@ void SelfPlayGenerator::generate_and_save(
     }
     
     std::vector<TrainingExample> all_examples;
-    all_examples.reserve(config_.num_games * 60);  // Estimate ~60 moves per game
+    all_examples.reserve(config_.num_games * 64);  // Estimate ~60 moves per game
     
     for (int game_idx = 0; game_idx < config_.num_games; game_idx++) {
         // Play one game
@@ -73,7 +73,7 @@ void SelfPlayGenerator::generate_and_save(
 
 std::vector<TrainingExample> SelfPlayGenerator::play_game() {
     std::vector<TrainingExample> examples;
-    examples.reserve(60);  // Typical game length
+    examples.reserve(64);  // Typical game length
     
     
     // Initialize game
@@ -171,7 +171,8 @@ void SelfPlayGenerator::save_examples_to_file(
         file.write(reinterpret_cast<const char*>(&ex.state.currentDiscs), sizeof(uint64_t));
         file.write(reinterpret_cast<const char*>(&ex.state.opponentDiscs), sizeof(uint64_t));
         file.write(reinterpret_cast<const char*>(&ex.state.legalMoves), sizeof(uint64_t));
-        file.write(reinterpret_cast<const char*>(&ex.state.lastMoveWasPass), sizeof(bool));
+        uint8_t pass = ex.state.lastMoveWasPass ? 1 : 0;
+        file.write(reinterpret_cast<const char*>(&pass), sizeof(uint8_t));
         
         // Write visit counts (256 bytes)
         file.write(reinterpret_cast<const char*>(ex.visit_counts.data()), 
