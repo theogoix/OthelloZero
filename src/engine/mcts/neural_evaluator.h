@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <string>
+#include <future>
 #include "othello/othello.h"
 
 
@@ -26,6 +27,10 @@ public:
     
     // Evaluate a batch of positions
     std::vector<NNEval> evaluate_batch(
+        const std::vector<Othello::OthelloState>& states);
+    
+    // Async evaluation of a batch of position
+    std::future<std::vector<NNEval>> evaluate_batch_async(
         const std::vector<Othello::OthelloState>& states);
     
     bool is_available() const { return initialized_; }

@@ -99,6 +99,9 @@ private:
     
     // Add Dirichlet noise to root for exploration
     void add_dirichlet_noise(Node* root);
+    void process_batch(
+        const std::vector<SelectResult>& select_results,
+        const std::vector<NNEval>& evals);
 
 };
 

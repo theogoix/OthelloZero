@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
+#include <future>
 #include <cassert>
 
 namespace OthelloMCTS {
@@ -67,7 +68,10 @@ Node* MCTSSearch::get_child_node(Node* root, Othello::OthelloMove move) {
     return nullptr;  // Move not found in children
 }
 
-
+// Performs a MCTS search starting at the root_state,
+// Returns a pointer to the root of the MCTS tree,
+// The root optional argument should if provided have the same state
+// as the input state, in which case the search will resume from the already performed work
 Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
     // Create root node
     
@@ -78,13 +82,59 @@ Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
         assert(root->state == root_state);
     }
 
+    if (!root->expanded){
+        SelectResult first_result = select_leaf(root);
+        Othello::OthelloState first_state = first_result.leaf->state;
+        if (Othello::OthelloOps::isTerminal(first_state)){
+            backpropagate(first_result, Othello::OthelloOps::gameResult(first_state));
+            return root;
+        }
+        else{
 
+            std::vector<Othello::OthelloState> first_state_vec = {first_state};
+            std::vector<NNEval> first_eval = evaluator_.evaluate_batch(first_state_vec);
+            expand_node(first_result.leaf, first_eval[0]);
+            backpropagate(first_result, first_eval[0].value);
+            if (config_.use_dirichlet) {
+                add_dirichlet_noise(first_result.leaf);
+            }
+        }
+    }
+
+    struct InFlightBatch{
+        std::future<std::vector<NNEval>> future;
+        std::vector<SelectResult> select_results;
+    };
 
     int simulations_done = 0;
+    std::queue<InFlightBatch> in_flight_batches;
+    const int MAX_IN_FLIGHT = 3;
     
     while (simulations_done < config_.num_simulations) {
+
+        // checks if there are batches already processed by the neural evaluator,
+        // if so, process them
+        while (!in_flight_batches.empty()){
+            InFlightBatch& front = in_flight_batches.front();
+            if (front.future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                std::vector<NNEval> evals = front.future.get();
+                process_batch(front.select_results, evals);
+                in_flight_batches.pop();
+            }
+            else {
+                break;
+            }
+        }
+
+        // if there is a backlog of batches too long, wait for one to unclog
+        if (in_flight_batches.size() >= MAX_IN_FLIGHT){
+            InFlightBatch& front = in_flight_batches.front();
+            std::vector<NNEval> evals = front.future.get();
+            process_batch(front.select_results, evals);
+            in_flight_batches.pop();
+        }
+
         // Phase 1: Collect batch of leaf nodes
-        std::vector<Node*> batch_nodes;
         std::vector<SelectResult> batch_results;
         
         int batch_size = std::min(
@@ -99,50 +149,64 @@ Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
             if (result.leaf->is_terminal()) {
                 float terminal_value = Othello::OthelloOps::gameResult(result.leaf->state);
                 backpropagate(result, terminal_value);
-                simulations_done++;
                 continue;
             }
             
-            batch_nodes.push_back(result.leaf);
             batch_results.push_back(result);
         }
         
-        if (batch_nodes.empty()) continue;
+        simulations_done += batch_size;
+
+        if (batch_results.empty()) continue;
         
         // Phase 2: Evaluate batch with neural network
+
+
         std::vector<Othello::OthelloState> states;
-        for (Node* node : batch_nodes) {
-            states.push_back(node->state);
+        for (const SelectResult& result : batch_results) {
+            states.push_back(result.leaf->state);
         }
-        
-        auto evaluations = evaluator_.evaluate_batch(states);
-        
-        // Phase 3: Expand nodes and backpropagate
-        for (size_t i = 0; i < batch_nodes.size(); i++) {
-            Node* node = batch_nodes[i];
-            
-            if (!node->expanded) {
-                expand_node(node, evaluations[i]);
-            }
-            
-            backpropagate(batch_results[i], evaluations[i].value);
-        }
-        
-        simulations_done += batch_nodes.size();
-        
-        // Add Dirichlet noise to root after first batch (when root is expanded)
-        if (simulations_done == batch_size && 
-            config_.use_dirichlet && 
-            root->expanded) {
-            add_dirichlet_noise(root);
-        }
+
+        InFlightBatch batch;
+        batch.future = evaluator_.evaluate_batch_async(states);
+        batch.select_results = std::move(batch_results);
+        in_flight_batches.push(std::move(batch));
+
     }
     
+    while (!in_flight_batches.empty()){
+        InFlightBatch& front = in_flight_batches.front();
+        std::vector<NNEval> evals = front.future.get();
+        process_batch(front.select_results, evals);
+        in_flight_batches.pop();
+
+    }
+
 
 
     return root;
 }
 
+void MCTSSearch::process_batch(
+    const std::vector<SelectResult>& select_results,
+    const std::vector<NNEval>& evals
+){
+    for (size_t i = 0 ; i < select_results.size() ; i++){
+        Node* node = select_results[i].leaf;
+        if (!node->expanded){
+            expand_node(node, evals[i]);
+            backpropagate(select_results[i], evals[i].value);
+        }
+    }
+    return;
+}
+
+
+// Returns the leaf, ie a non-expanded node
+// as well as the path (the sequence of nodes and edges)
+// that were explored to reach the leaf
+// the leaf state could be terminal or not,
+// but never a state where the only legal move is a PASS
 SelectResult MCTSSearch::select_leaf(Node* root) {
     SelectResult result;
     Node* node = root;

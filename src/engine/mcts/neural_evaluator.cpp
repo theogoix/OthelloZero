@@ -119,6 +119,13 @@ std::vector<NNEval> NeuralEvaluator::evaluate_batch(
     return results;
 }
 
+std::future<std::vector<NNEval>> NeuralEvaluator::evaluate_batch_async(
+    const std::vector<Othello::OthelloState>& states){
+        return std::async(std::launch::async, [this, states](){
+            return this->evaluate_batch(states);
+            });
+}
+
 
 
 
