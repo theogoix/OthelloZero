@@ -13,7 +13,7 @@ namespace Othello{
         uint64_t currentDiscs;
         uint64_t opponentDiscs;
         uint64_t legalMoves;
-        bool lastMoveWasPass;    
+        bool lastMoveWasPass;
         
         bool operator==(const OthelloState& other) const {
         return currentDiscs == other.currentDiscs &&

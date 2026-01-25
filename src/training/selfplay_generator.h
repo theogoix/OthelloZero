@@ -1,4 +1,3 @@
-// selfplay_generator.h
 #ifndef SELFPLAY_GENERATOR_H
 #define SELFPLAY_GENERATOR_H
 
@@ -14,13 +13,42 @@ namespace Training {
 // Single training example from one position
 struct TrainingExample {
     Othello::OthelloState state;
-    std::array<int32_t, 64> visit_counts;  // Raw visit counts from MCTS
+    std::array<float, 64> policy;  // Raw visit counts from MCTS
     int8_t outcome;  // -1 = loss, 0 = draw, 1 = win (current player's perspective)
+    float q_value;
+
+
     
     TrainingExample() : outcome(0) {
-        visit_counts.fill(0);
+        policy.fill(0);
     }
 };
+
+
+struct PositionData {
+    Othello::OthelloState state;           // Full state (25 bytes)
+    std::array<int32_t, 64> visit_counts;  // MCTS visits (256 bytes)
+    std::array<float, 64> q_values;        // Q-value for each action (256 bytes)
+    Othello::OthelloMove move_played;      // Move that was actually selected (1 byte)
+    float temperature;                      // Temperature used (4 bytes)
+    uint32_t thinking_time_ms;             // Time spent (4 bytes)
+};
+
+struct GameMetadata {
+    uint32_t game_id;
+    int8_t outcome;                        // Final result: +1, 0, -1
+    uint8_t player1_disc_count;            // Final disc counts
+    uint8_t player2_disc_count;
+    std::string timestamp;
+    
+    // All positions in chronological order
+    std::vector<PositionData> positions;
+    
+    // Derived properties
+    uint16_t num_moves() const { return positions.size(); }
+};
+
+
 
 // Configuration for self-play generation
 struct SelfPlayConfig {
@@ -39,6 +67,7 @@ struct SelfPlayConfig {
     bool use_dirichlet = true;
     float dirichlet_alpha = 0.3f;
     float dirichlet_epsilon = 0.25f;
+    bool use_async = true;
     
     // Output
     bool verbose = true;
@@ -57,6 +86,7 @@ public:
         int chunck_save = 50,
         bool append = true
     );
+
     
     // Generate single game (returns all positions from the game)
     std::vector<TrainingExample> play_game();

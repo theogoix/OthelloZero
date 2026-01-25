@@ -79,6 +79,25 @@ Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
         assert(root->state == root_state);
     }
 
+    if (!root->expanded){
+        SelectResult first_result = select_leaf(root);
+        Othello::OthelloState first_state = first_result.leaf->state;
+        if (Othello::OthelloOps::isTerminal(first_state)){
+            backpropagate(first_result, Othello::OthelloOps::gameResult(first_state));
+            return root;
+        }
+        else{
+
+            std::vector<Othello::OthelloState> first_state_vec = {first_state};
+            std::vector<NNEval> first_eval = evaluator_.evaluate_batch(first_state_vec);
+            expand_node(first_result.leaf, first_eval[0]);
+            backpropagate(first_result, first_eval[0].value);
+            if (config_.use_dirichlet) {
+                add_dirichlet_noise(first_result.leaf);
+            }
+        }
+    }
+
 
 
     int simulations_done = 0;
@@ -131,12 +150,6 @@ Node* MCTSSearch::search(const Othello::OthelloState& root_state, Node* root) {
         
         simulations_done += batch_nodes.size();
         
-        // Add Dirichlet noise to root after first batch (when root is expanded)
-        if (simulations_done == batch_size && 
-            config_.use_dirichlet && 
-            root->expanded) {
-            add_dirichlet_noise(root);
-        }
     }
     
 
@@ -274,8 +287,9 @@ void MCTSSearch::process_batch(
         Node* node = select_results[i].leaf;
         if (!node->expanded){
             expand_node(node, evals[i]);
-            backpropagate(select_results[i], evals[i].value);
         }
+        backpropagate(select_results[i], evals[i].value);
+        
     }
     return;
 }
@@ -431,6 +445,22 @@ std::array<int, 64> MCTSSearch::get_visit_counts(Node* root) const {
     return counts;
 }
 
+std::array<float, 64> MCTSSearch::get_policy(Node* root) const {
+    std::array<float, 64> policy;
+    policy.fill(0);
+
+    if (!root || !root->expanded || !root->state.legalMoves || root->visit_count == 0) {
+        return policy;
+    }
+
+
+    for (const Edge& edge : root->edges) {
+        policy[edge.move] = (float) edge.visit_count / (float) root->visit_count;
+    }
+    return policy;
+
+}
+
 
 std::array<float, 64> MCTSSearch::get_q_values(Node* root) const {
     std::array<float, 64> q_values;
@@ -445,6 +475,24 @@ std::array<float, 64> MCTSSearch::get_q_values(Node* root) const {
     }
     
     return q_values;
+}
+
+float MCTSSearch::get_q_value_root(Node* root) const {
+    if (Othello::OthelloOps::isTerminal(root->state)){
+        return Othello::OthelloOps::gameResult(root->state);
+    }
+    else if (!root->expanded){
+        return 0;
+    }
+    else {
+        float total_value = 0;
+        int total_visits = 0;
+        for (const Edge& edge: root->edges){
+            total_value += edge.total_value;
+            total_visits += edge.visit_count;
+        }
+        return total_value / total_visits;
+    }
 }
 
 

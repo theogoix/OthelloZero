@@ -2,6 +2,7 @@
 #include "selfplay_generator.h"
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <random>
 
@@ -33,10 +34,11 @@ void SelfPlayGenerator::generate_and_save(
         std::cout << "  Simulations per move: " << config_.simulations_per_move << "\n";
         std::cout << "  Output: " << output_path << "\n";
         std::cout << "  Append mode: " << (append ? "yes" : "no") << "\n\n";
+        std::cout << "  Using " << (config_.use_async ? "async" : "non async") << " version of search\n";
     }
     
     std::vector<TrainingExample> all_examples;
-    all_examples.reserve(config_.num_games * 64);  // Estimate ~60 moves per game
+    all_examples.reserve(config_.num_games * 64);  // Estimate ~64 moves per game
     
     for (int game_idx = 0; game_idx < config_.num_games; game_idx++) {
         // Play one game
@@ -85,13 +87,14 @@ std::vector<TrainingExample> SelfPlayGenerator::play_game() {
     // Play game
     while (!Othello::OthelloOps::isTerminal(state)) {
         // Run MCTS search (with tree reuse if available)
-        root = search_.search(state, root);
+        root = config_.use_async ? search_.search_async(state, root) : search_.search(state, root);
         
         // Extract training data
         TrainingExample example;
         example.state = state;
-        example.visit_counts = search_.get_visit_counts(root);
+        example.policy = search_.get_policy(root);
         example.outcome = 0;  // Will be filled in after game ends
+        example.q_value = search_.get_q_value_root(root);
         examples.push_back(example);
         
         // Select move with temperature
@@ -111,12 +114,12 @@ std::vector<TrainingExample> SelfPlayGenerator::play_game() {
     // Game finished - determine outcome
     int8_t outcome = Othello::OthelloOps::gameResult(state);
     
-    
+
     // Update all examples with game outcome
     // Important: flip outcome for each position (alternating players)
-    for (size_t i = 0; i < examples.size(); i++) {
+    for (int i = examples.size() - 1; i >= 0; i--) {
+        outcome = -outcome;
         examples[i].outcome = outcome;
-        outcome = -outcome;  // Flip for next position
     }
     
     // Print summary
@@ -149,13 +152,17 @@ void SelfPlayGenerator::save_examples_to_file(
         mode |= std::ios::trunc;
     }
     
+    bool file_exists = std::filesystem::exists(path);
+    bool write_header = !append || !file_exists;
+
+
     std::ofstream file(path, mode);
     if (!file) {
         throw std::runtime_error("Failed to open file: " + path);
     }
     
     // Write header only if creating new file
-    if (!append || !std::ifstream(path).good()) {
+    if (write_header) {
         uint32_t magic = 0x4F544844;  // "OTHD" - Othello Training Data
         uint32_t version = 1;
         uint64_t num_examples = examples.size();
@@ -175,11 +182,14 @@ void SelfPlayGenerator::save_examples_to_file(
         file.write(reinterpret_cast<const char*>(&pass), sizeof(uint8_t));
         
         // Write visit counts (256 bytes)
-        file.write(reinterpret_cast<const char*>(ex.visit_counts.data()), 
-                   64 * sizeof(int32_t));
+        file.write(reinterpret_cast<const char*>(ex.policy.data()), 
+                   64 * sizeof(float));
         
         // Write outcome (1 byte)
         file.write(reinterpret_cast<const char*>(&ex.outcome), sizeof(int8_t));
+
+        // Write q value (4 byte)
+        file.write(reinterpret_cast<const char*>(&ex.q_value), sizeof(float));
     }
     
     file.close();

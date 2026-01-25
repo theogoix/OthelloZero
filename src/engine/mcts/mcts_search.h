@@ -57,7 +57,10 @@ public:
     
     // Extract information from root (after search)
     std::array<int, 64> get_visit_counts(Node* root) const;
+    std::array<float, 64> get_policy(Node* root) const;
     std::array<float, 64> get_q_values(Node* root) const;
+    float get_q_value_root(Node* root) const;
+
 
     // Tree reuse: get child node for move (returns nullptr if not found)
     Node* get_child_node(Node* root, Othello::OthelloMove move);

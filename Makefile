@@ -2,7 +2,7 @@ CXX = g++
 PYTHON = python.3.12
 PYTHON_CONFIG = python3.12-config
 
-OPT ?= 0
+OPT ?= 2
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -O$(OPT) -Iexternal -Isrc -fPIC -Wno-unused-parameter
 
 VENV := .venv
@@ -72,6 +72,8 @@ EXECUTABLE = $(BIN_DIR)/engine
 EXECUTABLE_MAIN = $(MAIN_DIR)/main.cpp
 DATAGEN_EXE = $(BIN_DIR)/datagen
 DATAGEN_MAIN = $(MAIN_DIR)/generate_selfplay.cpp
+ARENA_EXE = $(BIN_DIR)/arena 
+ARENA_MAIN = $(MAIN_DIR)/run_arena.cpp
 
 TEST_SOURCES = $(shell find $(TEST_DIR) -type f -name '*.cpp')
 TEST_OBJECTS = $(patsubst $(TEST_DIR)/%.cpp,$(TEST_OBJ_DIR)/%.o,$(TEST_SOURCES))
@@ -87,6 +89,8 @@ all: $(EXECUTABLE)
 	#@echo $(OTHELLO_OBJ)
 
 training: $(DATAGEN_EXE)
+
+arena: $(ARENA_EXE)
 
 $(VENV):
 	python -m venv $(VENV)
@@ -144,6 +148,9 @@ $(DATAGEN_EXE): $(OTHELLO_OBJ) $(ENGINE_OBJ) $(TRAINING_OBJ)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -o $@ $^ $(DATAGEN_MAIN) $(LIBTORCH_LIB_DIR) $(LIBTORCH_LIBS)
 
+$(ARENA_EXE): $(OTHELLO_OBJ) $(ENGINE_OBJ) $(TRAINING_OBJ)
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(LIBTORCH_INCLUDE) -o $@ $^ $(ARENA_MAIN) $(LIBTORCH_LIB_DIR) $(LIBTORCH_LIBS)
 
 
 tests: $(TEST_EXECUTABLE)
