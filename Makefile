@@ -175,8 +175,9 @@ clean:
 
 clean_bindings:
 	rm -f $(BINDINGS_SHARED_DIR)/*.so
-	
 
+clean_othello:
+	rm -rf $(OTHELLO_BUILD_DIR)
 
 clean_executable:
 	rm -rf $(BIN_DIR)
