@@ -94,7 +94,8 @@ constexpr Bitboard shift(Bitboard bb){
 template<int dir_id>
 constexpr Bitboard shift_id(Bitboard bb){
     constexpr Direction dir = direction_mask_lookup[dir_id].dir;
-    return shift<dir>(bb); 
+    constexpr Bitboard mask = direction_mask_lookup[dir_id].mask;
+    return shift<dir>(bb) & mask; 
 }
 
 template<int direction_id>
@@ -119,10 +120,10 @@ Bitboard generateMovesBb(Bitboard cur, Bitboard opp){
 
     #define GENERATE_MOVES_DIR(id) \
         do { \
-            Bitboard gen = cur;\
-            Bitboard pro = opp | ( emp & shift_id<id>(opp));\
+            Bitboard gen = shift_id<id>(cur) & opp;\
+            Bitboard pro = opp;\
             Bitboard dir_fill = fill<id>(gen, pro);\
-            Bitboard cand_mov_dir = dir_fill & emp;\
+            Bitboard cand_mov_dir = shift_id<id>(dir_fill) & emp;\
             candidate_moves |= cand_mov_dir;\
         } while(0);
 
