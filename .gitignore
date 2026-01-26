@@ -8,5 +8,6 @@ logs/
 src/training/backup/
 compile_commands.json
 *.so
-*/__pycache__/
+src/gui/__pycache__/
 external/
+src/training_backup/
