@@ -3,3 +3,10 @@ bin/
 data/
 models/
 .venv/
+logs/
+*.csv
+src/training/backup/
+compile_commands.json
+*.so
+*/__pycache__/
+external/
