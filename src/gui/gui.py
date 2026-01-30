@@ -41,23 +41,34 @@ class OthelloGUI:
         self.small_font = pygame.font.SysFont(None, 20)
         
         # Buttons
-        self.human_toggle_rect = pygame.Rect(10, WINDOW_SIZE + 5, 150, 30)
-        self.takeback_rect = pygame.Rect(170, WINDOW_SIZE + 5, 100, 30)
-        self.reset_rect = pygame.Rect(280, WINDOW_SIZE + 5, 80, 30)
-        self.pass_rect = pygame.Rect(370, WINDOW_SIZE + 5, 80, 30)
+        self.black_toggle_rect = pygame.Rect(10, WINDOW_SIZE + 5, 100, 30)
+        self.white_toggle_rect = pygame.Rect(120, WINDOW_SIZE + 5, 100, 30)
+        self.takeback_rect = pygame.Rect(230, WINDOW_SIZE + 5, 100, 30)
+        self.reset_rect = pygame.Rect(340, WINDOW_SIZE + 5, 80, 30)
+        self.pass_rect = pygame.Rect(430, WINDOW_SIZE + 5, 80, 30)
         
         # Status text area
         self.status_rect = pygame.Rect(10, WINDOW_SIZE + 40, WINDOW_SIZE - 20, 35)
 
     def draw_buttons(self):
-        # Human toggle button
-        text = "H1 vs H2" if self.human_players[-1] else "H vs AI"
+        # Black toggle button
+        text = "B: Human" if self.human_players[1] else "B: AI"
         color = LIGHT_GRAY if self.ai_thinking else GRAY
-        pygame.draw.rect(self.screen, color, self.human_toggle_rect)
-        pygame.draw.rect(self.screen, BLACK, self.human_toggle_rect, 2)
+        pygame.draw.rect(self.screen, color, self.black_toggle_rect)
+        pygame.draw.rect(self.screen, BLACK, self.black_toggle_rect, 2)
         self.screen.blit(
             self.font.render(text, True, BLACK),
-            (self.human_toggle_rect.x + 15, self.human_toggle_rect.y + 5)
+            (self.black_toggle_rect.x + 5, self.black_toggle_rect.y + 5)
+        )
+
+        # White toggle button
+        text = "W: Human" if self.human_players[-1] else "W: AI"
+        color = LIGHT_GRAY if self.ai_thinking else GRAY
+        pygame.draw.rect(self.screen, color, self.white_toggle_rect)
+        pygame.draw.rect(self.screen, BLACK, self.white_toggle_rect, 2)
+        self.screen.blit(
+            self.font.render(text, True, BLACK),
+            (self.white_toggle_rect.x + 5, self.white_toggle_rect.y + 5)
         )
 
         # Takeback button
@@ -194,7 +205,10 @@ class OthelloGUI:
                 mx, my = event.pos
 
                 # Button clicks
-                if self.human_toggle_rect.collidepoint(mx, my):
+                if self.black_toggle_rect.collidepoint(mx, my):
+                    self.human_players[1] = not self.human_players[1]
+                    self.mcts.reset()
+                elif self.white_toggle_rect.collidepoint(mx, my):
                     self.human_players[-1] = not self.human_players[-1]
                     self.mcts.reset()
                 elif self.takeback_rect.collidepoint(mx, my):
@@ -247,6 +261,11 @@ class OthelloGUI:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         self.running = False
+                    elif event.type == pygame.MOUSEBUTTONDOWN and not self.ai_thinking:
+                        mx, my = event.pos
+                        if self.reset_rect.collidepoint(mx, my):
+                            self.reset_game()
+
 
             self.clock.tick(FPS)
 
@@ -257,11 +276,12 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) < 2:
-        print("Usage: python othello_gui.py <model_path> [simulations]")
+        print("Usage: python gui.py <model_path> [simulations]")
         sys.exit(1)
     
     model_path = sys.argv[1]
     simulations = int(sys.argv[2]) if len(sys.argv) > 2 else 400
     
+
     gui = OthelloGUI(model_path, human1=True, human2=False, simulations=simulations)
     gui.run()
