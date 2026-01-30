@@ -36,47 +36,83 @@ def run_quick_test():
     pipeline.run()
 
 
-def run_standard_training():
-    """Run standard training (recommended settings)"""
-    config = PipelineConfig()
-    
-    # Standard settings
-    config.start_iteration = 48
-    config.num_iterations = 60
-    config.selfplay.num_games = 400
-    config.selfplay.simulations_per_move = 800
-    config.training.num_epochs = 20
-    config.training.batch_size = 256
-    config.arena.num_games = 100
-    config.arena.simulations_per_move = 800
-    
-    # Model settings
-    config.training.model_size = 'small'
-    
-    # Data management
-    config.data_window_size = 10  # Use last 5 iterations
-    
-    # Promotion criteria
-    config.promotion_threshold = 0.55  # Need 55% win rate
-    config.require_significance = True  # Require statistical significance
-    
-    # Paths
-    BASE_DIR = Path(__file__).resolve().parents[2]
 
-    config.base_dir = BASE_DIR
-    config.selfplay_binary = BASE_DIR / "bin" / "datagen"
-    config.arena_binary = BASE_DIR / "bin" / "arena"
-    config.models_dir = BASE_DIR / "models" / "standard"
-    config.data_dir = BASE_DIR / "data" / "standard"
+
+def resume_from_iteration(iteration: int):
+    """Resume training from a specific iteration"""
+    # Load existing config
+    config_path = Path("../../logs/pipeline_config.json")
     
-    # Save config
-    config.save(config.logs_dir / "standard_training_config.json")
+    if config_path.exists():
+        config = PipelineConfig.load(config_path)
+    else:
+        print("No existing config found, using defaults")
+        config = PipelineConfig()
+    
+    # Set starting iteration
+    config.start_iteration = iteration
+    
+    print(f"Resuming from iteration {iteration}")
     
     # Run pipeline
     pipeline = TrainingPipeline(config)
     pipeline.run()
 
 
+def custom_training():
+    """Custom training configuration"""
+    config = PipelineConfig()
+    
+    # Customize each component
+    
+    # Self-play settings
+    config.selfplay.num_games = 1500
+    config.selfplay.simulations_per_move = 1000
+    config.selfplay.temperature_threshold_move = 30
+    config.selfplay.exploration_temperature = 1.0
+    config.selfplay.exploitation_temperature = 0.1
+    config.selfplay.c_puct = 1.5
+    config.selfplay.use_dirichlet = True
+    config.selfplay.chunk_save = 100  # Save every 100 games
+    
+    # Training settings
+    config.training.model_size = 'small'
+    config.training.num_epochs = 12
+    config.training.batch_size = 256
+    config.training.learning_rate = 0.001
+    config.training.weight_decay = 1e-4
+    config.training.use_augmentation = True
+    config.training.use_mix_z_q = True
+    
+    # Arena settings
+    config.arena.num_games = 150
+    config.arena.simulations_per_move = 1000
+    config.arena.temperature = 0.1  # Low temp = strong play
+    config.arena.alternate_colors = True
+    
+    # Pipeline settings
+    config.num_iterations = 75
+    config.data_window_size = 7
+    config.promotion_threshold = 0.55
+    config.require_significance = True
+    
+    # Paths (adjust to your setup)
+    config.base_dir = Path("../../")
+    config.models_dir = Path("../../models")
+    config.data_dir = Path("../../data")
+    config.logs_dir = Path("../../logs")
+    config.selfplay_binary = "./build/selfplay"
+    config.arena_binary = "./build/arena"
+    
+    # Optional: start from a pre-trained model
+    # config.initial_model_path = "path/to/pretrained_model.pt"
+    
+    # Save config
+    config.save(config.logs_dir / "custom_config.json")
+    
+    # Run pipeline
+    pipeline = TrainingPipeline(config)
+    pipeline.run()
 
 
 if __name__ == "__main__":
